@@ -35,9 +35,6 @@
 //============================================================================
 // interface
 //============================================================================
-// external
-#include <new>
-
 // new
 class ffunc_callstack;
 struct ffunc_sleep;
@@ -57,8 +54,22 @@ struct ffunc_sleep;
       return true;\
   }
 #define FFUNC_START(ffunc_callstack__, ffunc__, ffunc_args__) new(ffunc_callstack__.start<ffunc__>())ffunc__ ffunc_args__
+// inline
+#ifdef __GNUC__
 #define FFUNC_INLINE inline __attribute__((always_inline))
-//#define FFUNC_INLINE __forceinline
+#elif defined(_MSC_VER)
+#define FFUNC_INLINE __forceinline
+#else FFUNC_INLINE inline
+#define 
+#endif
+// new definition
+#ifndef FFUNC_NO_PNEW
+#if defined(ARDUINO) && !defined(CORE_TEENSY)
+FFUNC_INLINE void *operator new(size_t, void *ptr_) throw() {return ptr_;}
+#else
+#include <new>
+#endif
+#endif // FFUNC_NO_PNEW
 //----------------------------------------------------------------------------
 
 
