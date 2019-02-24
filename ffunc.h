@@ -59,8 +59,8 @@ struct ffunc_sleep;
 #define FFUNC_INLINE inline __attribute__((always_inline))
 #elif defined(_MSC_VER)
 #define FFUNC_INLINE __forceinline
-#else FFUNC_INLINE inline
-#define 
+#else
+#define FFUNC_INLINE inline
 #endif
 // new definition
 #ifndef FFUNC_NO_PNEW
