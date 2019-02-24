@@ -150,4 +150,4 @@ void loop()
   s_prev_time=cur_time;
 }
 ```
-Note that you can have multiple callstacks to run multiple fiber functions simultaneously. For example if you want one fiber to animate a LED as shown in this example, and another one independently animating another LED, or motor, or something else entirely!
+Note that you can have multiple callstacks to run multiple fiber functions simultaneously. For example if you want one fiber to animate a LED as shown in this example, you can create another fiber which independently animates another LED, or motor, or something else entirely!
