@@ -147,6 +147,7 @@ public:
   FFUNC_INLINE unsigned capacity() const;  // capacity of the stack (i.e. max size)
   FFUNC_INLINE unsigned size() const;      // current stack data size
   FFUNC_INLINE unsigned peak_size() const; // peak lifetime stack usage
+  FFUNC_INLINE bool is_running() const;    // true if fiber is running in the stack
   FFUNC_INLINE bool is_abort() const;      // true if in abort state and the stack is unwinding
   //--------------------------------------------------------------------------
 
@@ -254,6 +255,12 @@ unsigned ffunc_callstack::peak_size() const
 }
 //----
 
+bool ffunc_callstack::is_running() const
+{
+  return m_ffunc_tick!=0;
+}
+//----
+
 bool ffunc_callstack::is_abort() const
 {
 #ifdef FFUNC_DISABLE_SAFE_ABORT
@@ -273,7 +280,7 @@ bool ffunc_callstack::tick(float delta_time_)
 template<class FFunc>
 void *ffunc_callstack::impl_start()
 {
-  FFUNC_ASSERT_LOG(m_size==0, "Stack used by another fiber\r\n");
+  FFUNC_ASSERT_LOG(!m_ffunc_tick, "Stack used by another fiber\r\n");
   FFUNC_ASSERT_LOGF(sizeof(FFunc)<=abs(m_capacity), "Stack overflow by %i bytes\r\n", unsigned(sizeof(FFunc)-abs(m_capacity)));
   m_ffunc_tick=&ffunc_tick<FFunc>;
   m_size+=sizeof(FFunc);
