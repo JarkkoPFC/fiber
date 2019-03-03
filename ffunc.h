@@ -35,10 +35,11 @@
 //============================================================================
 // config
 //============================================================================
-//#define FFUNC_ENABLE_ASSERTS   // enable asserts (useful for debugging, but adds memory & perf overhead)
-//#define FFUNC_ENABLE_MEM_TRACK // enable stack memory tracking (to optimize stack memory usage)
-//#define FFUNC_DISABLE_LOGS     // disable logs (reduces program size)
-//#define FFUNC_DISABLE_PNEW     // disable placement new operator definition (must be defined outside of ffunc.h)
+//#define FFUNC_ENABLE_ASSERTS     // enable asserts (useful for debugging, but adds memory & perf overhead)
+//#define FFUNC_ENABLE_MEM_TRACK   // enable stack memory tracking (to optimize stack memory usage)
+//#define FFUNC_DISABLE_LOGS       // disable logs (reduces program size)
+//#define FFUNC_DISABLE_SAFE_ABORT // disable safe callstack abort support, which unwinds the stack (to optimize performance)
+//#define FFUNC_DISABLE_PNEW       // disable placement new operator definition (must be defined outside of ffunc.h)
 //----------------------------------------------------------------------------
 
 
@@ -64,12 +65,14 @@ struct ffunc_sleep;
     if(__ffunc_cs_.size()==__ffunc_stack_pos_)\
     {\
       __m_ffunc_active_line=__LINE__;\
-      new(__ffunc_cs_.push<ffunc__ >())ffunc__ ffunc_args__;\
+      new(__ffunc_cs_.impl_push<ffunc__ >())ffunc__ ffunc_args__;\
     }\
-    if(__ffunc_cs_.tick<ffunc__ >(__ffunc_stack_pos_, __ffunc_dtime_))\
+    if(__ffunc_cs_.impl_tick<ffunc__ >(__ffunc_stack_pos_, __ffunc_dtime_))\
       return true;\
+    if(__ffunc_cs_.is_abort())\
+      return false;\
   }
-#define FFUNC_START(ffunc_callstack__, ffunc__, ffunc_args__) new(ffunc_callstack__.start<ffunc__ >())ffunc__ ffunc_args__
+#define FFUNC_START(ffunc_callstack__, ffunc__, ffunc_args__) new(ffunc_callstack__.impl_start<ffunc__ >())ffunc__ ffunc_args__
 // inline
 #ifdef __GNUC__
 #define FFUNC_INLINE inline __attribute__((always_inline))
@@ -136,29 +139,33 @@ public:
   FFUNC_INLINE ffunc_callstack(unsigned capacity_=256);
   FFUNC_INLINE ffunc_callstack(size_t *buffer_, unsigned capacity_=0);
   FFUNC_INLINE ~ffunc_callstack();
-  FFUNC_INLINE unsigned peak_size() const;
+  FFUNC_INLINE void abort();
+  FFUNC_INLINE void force_abort();
+  //--------------------------------------------------------------------------
+
+  // accessors
+  FFUNC_INLINE unsigned capacity() const;  // capacity of the stack (i.e. max size)
+  FFUNC_INLINE unsigned size() const;      // current stack data size
+  FFUNC_INLINE unsigned peak_size() const; // peak lifetime stack usage
+  FFUNC_INLINE bool is_abort() const;      // true if in abort state and the stack is unwinding
   //--------------------------------------------------------------------------
 
   // ticking
   FFUNC_INLINE bool tick(float delta_time_);
   //--------------------------------------------------------------------------
 
-  // fiber func private API
-  template<class FFunc> FFUNC_INLINE void *start();
-  template<class FFunc> FFUNC_INLINE void *push();
-  FFUNC_INLINE unsigned size() const {return m_size;}
-  template<class FFunc> FFUNC_INLINE bool tick(unsigned stack_pos_, float dtime_);
+  // private interface for FFUNC macros (do not use)
+  template<class FFunc> void *impl_start();
+  template<class FFunc> void *impl_push();
+  template<class FFunc> bool impl_tick(unsigned stack_pos_, float dtime_);
   //--------------------------------------------------------------------------
 
 private:
-  static bool ffunc_tick_null(ffunc_callstack&, float delta_time_) {return false;}
   template<typename FFunc> static bool ffunc_tick(ffunc_callstack &cs_, float delta_time_)
   {
-    // tick re-entrant function callstack
-    FFunc *ff=(FFunc*)cs_.m_stack;
-    if(ff->tick(cs_, sizeof(FFunc), delta_time_))
+    if(cs_.impl_tick<FFunc>(0, delta_time_))
       return true;
-    ff->~FFunc();
+    cs_.m_ffunc_tick=0;
     return false;
   }
   //--------------------------------------------------------------------------
@@ -176,7 +183,7 @@ private:
 ffunc_callstack::ffunc_callstack(unsigned capacity_)
 {
   m_stack=malloc(capacity_);
-  m_ffunc_tick=&ffunc_tick_null;
+  m_ffunc_tick=0;
   m_capacity=int(capacity_);
   m_size=0;
 #ifdef FFUNC_ENABLE_MEM_TRACK
@@ -188,8 +195,8 @@ ffunc_callstack::ffunc_callstack(unsigned capacity_)
 ffunc_callstack::ffunc_callstack(size_t *buffer_, unsigned capacity_)
 {
   m_stack=buffer_;
-  m_ffunc_tick=&ffunc_tick_null;
-  m_capacity=-int(capacity_); // negative capacity to indicate the buffer isn't dynamically allocated by the class
+  m_ffunc_tick=0;
+  m_capacity=-int(capacity_); // negative capacity to indicate the buffer isn't dynamically allocated by the class (skip free upon destruction)
   m_size=0;
 #ifdef FFUNC_ENABLE_MEM_TRACK
   m_peak_size=0;
@@ -199,9 +206,41 @@ ffunc_callstack::ffunc_callstack(size_t *buffer_, unsigned capacity_)
 
 ffunc_callstack::~ffunc_callstack()
 {
-  FFUNC_ASSERT_LOG(m_size==0, "Destroying stack while in use by a fiber\r\n");
+  FFUNC_ASSERT_LOG(m_size==0, "Destroying stack while used by a fiber\r\n");
   if(m_capacity>0)
     free(m_stack);
+}
+//----
+
+void ffunc_callstack::abort()
+{
+#ifdef FFUNC_DISABLE_SAFE_ABORT
+  m_ffunc_tick=0;
+  m_size=0;
+#else
+  m_size=unsigned(-1);
+  tick(0);
+  m_size=0;
+#endif
+}
+//----
+
+void ffunc_callstack::force_abort()
+{
+  m_ffunc_tick=0;
+  m_size=0;
+}
+//----------------------------------------------------------------------------
+
+unsigned ffunc_callstack::capacity() const
+{
+  return abs(m_capacity);
+}
+//----
+
+unsigned ffunc_callstack::size() const
+{
+  return m_size;
 }
 //----
 
@@ -213,24 +252,28 @@ unsigned ffunc_callstack::peak_size() const
   return 0;
 #endif
 }
+//----
+
+bool ffunc_callstack::is_abort() const
+{
+#ifdef FFUNC_DISABLE_SAFE_ABORT
+  return false;
+#else
+  return m_size>(unsigned(-1)>>1);
+#endif
+}
 //----------------------------------------------------------------------------
 
 bool ffunc_callstack::tick(float delta_time_)
 {
-  if(!m_ffunc_tick(*this, delta_time_))
-  {
-    m_ffunc_tick=&ffunc_tick_null;
-    m_size=0;
-    return false;
-  }
-  return true;
+  return m_ffunc_tick && m_ffunc_tick(*this, delta_time_);
 }
 //----------------------------------------------------------------------------
 
 template<class FFunc>
-void *ffunc_callstack::start()
+void *ffunc_callstack::impl_start()
 {
-  FFUNC_ASSERT_LOG(m_size==0, "Stack in use by another fiber\r\n");
+  FFUNC_ASSERT_LOG(m_size==0, "Stack used by another fiber\r\n");
   FFUNC_ASSERT_LOGF(sizeof(FFunc)<=abs(m_capacity), "Stack overflow by %i bytes\r\n", unsigned(sizeof(FFunc)-abs(m_capacity)));
   m_ffunc_tick=&ffunc_tick<FFunc>;
   m_size+=sizeof(FFunc);
@@ -243,7 +286,7 @@ void *ffunc_callstack::start()
 //----
 
 template<class FFunc>
-void *ffunc_callstack::push()
+void *ffunc_callstack::impl_push()
 {
   FFUNC_ASSERT_LOGF(m_size+sizeof(FFunc)<=abs(m_capacity), "Stack overflow by %i bytes\r\n", unsigned(m_size+sizeof(FFunc)-abs(m_capacity)));
   FFunc *v=(FFunc*)(((char*)m_stack)+m_size);
@@ -257,7 +300,7 @@ void *ffunc_callstack::push()
 //----
 
 template<class FFunc>
-bool ffunc_callstack::tick(unsigned stack_pos_, float dtime_)
+bool ffunc_callstack::impl_tick(unsigned stack_pos_, float dtime_)
 {
   FFunc *ff=(FFunc*)((char*)m_stack+stack_pos_);
   if(ff->tick(*this, stack_pos_+sizeof(FFunc), dtime_))
@@ -290,7 +333,7 @@ FFUNC_IMPL(ffunc_sleep)
     return false;
   }
   __ffunc_dtime_=0.0f;
-  return true;
+  return !__ffunc_cs_.is_abort();
 }
 //----------------------------------------------------------------------------
 
