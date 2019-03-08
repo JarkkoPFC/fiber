@@ -14,10 +14,10 @@ void blink_light(unsigned num_times_)
 {
   for(unsigned i=0; i<num_times_; ++i)
   {
-    // switch light on and wait for 1 second
+    // switch light on and wait for half a second
     light_on();
     delay(0.5);
-    // switch light off and wait for 1 second
+    // switch light off and wait for half a second
     light_off();
     delay(0.5);
   }
