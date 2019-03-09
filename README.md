@@ -1,7 +1,7 @@
 # Fiber
 *A portable single header C++ fiber function library for co-operative multitasking.*
 
-[Fibers](https://en.wikipedia.org/wiki/Fiber_(computer_science)) can be useful for implementing non-blocking long-running tasks such as script sequences with delays or other waits between function invocations. As opposed to [threads](https://en.wikipedia.org/wiki/Thread_(computing)), fibers are quite light weight constructs used to implement [co-operative multitasking](https://en.wikipedia.org/wiki/Cooperative_multitasking) (as opposed to [preempive multitasking](https://en.wikipedia.org/wiki/Preemption_(computing)) of threads).
+[Fibers](https://en.wikipedia.org/wiki/Fiber_(computer_science)) and [coroutines](https://en.wikipedia.org/wiki/Coroutine) can be useful for implementing non-blocking long-running tasks such as script sequences with delays or other waits between function invocations. As opposed to [threads](https://en.wikipedia.org/wiki/Thread_(computing)), fibers are quite light weight constructs used to implement [co-operative multitasking](https://en.wikipedia.org/wiki/Cooperative_multitasking) (as opposed to [preempive multitasking](https://en.wikipedia.org/wiki/Preemption_(computing)) of threads).
 
 Because fibers are not natively supported in the C++ language, this library tries to provide the functionality in form of reusable and somewhat accessible pattern without the need to manually write code to exhibit fiber-like behavior (e.g. using custom state machines). Particularly with deep function call hierarhies and complex logic the manual implementation can get quite difficult.
 
