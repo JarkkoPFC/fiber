@@ -162,6 +162,10 @@ public:
   //--------------------------------------------------------------------------
 
 private:
+  ffunc_callstack(const ffunc_callstack&); // not implemented
+  void operator=(const ffunc_callstack&); // not implemented
+  //--------------------------------------------------------------------------
+
   template<typename FFunc> static bool ffunc_tick(ffunc_callstack &cs_, float delta_time_)
   {
     if(cs_.impl_tick<FFunc>(0, delta_time_))
